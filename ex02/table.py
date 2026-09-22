@@ -57,7 +57,9 @@ def main(table_path: str):
     sql4 += "WITH (FORMAT csv, HEADER true, DELIMITER ',');"
 
     sql5 = f"INSERT INTO {tablename} SELECT * FROM staging_{tablename} " 
-    sql5 += "WHERE user_session IS NOT NULL;"
+    sql5 += "WHERE user_session IS NOT NULL AND user_id IS NOT NULL "
+    sql5 += "  AND price IS NOT NULL AND product_id IS NOT NULL "
+    sql5 += "  AND event_type IS NOT NULL AND event_time IS NOT NULL ;"    
 
     with psycopg.connect(
         "host=127.0.0.1 port=5432 dbname=piscineds user=luicasad password=mysecretpasswd"
@@ -88,6 +90,7 @@ def main(table_path: str):
                     cur.execute(f"SELECT COUNT(*) FROM {tablename};")
                     rows_imported = cur.fetchone()[0];
                     print(f"Table {tablename} populated succesfully with {rows_imported} rows")
+                    print(f"{rows_staged - rows_imported} having some feature with NULL values were dropped ")
                 except Exception as e:
                     conn.rollback()
                     print(f"Error importing {table_path}: {e}")
