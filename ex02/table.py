@@ -33,33 +33,50 @@ def path_test(path: str) -> str:
 def main(table_path: str):
     basename = os.path.basename(table_path)
     tablename = os.path.splitext(basename)[0]
-    sql0 = "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
-    sql0 += f"WHERE table_schema = 'public' AND table_name = '{tablename}');"
+    sql0 = psycopg.sql.SQL("""
+        SELECT EXISTS (SELECT 1 FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = {});
+    """).format(psycopg.sql.Literal(tablename))
 
-    sql1 = f"CREATE TABLE IF NOT EXISTS {tablename} ("
-    sql1 +=       "event_time   TIMESTAMPTZ NOT NULL,"
-    sql1 +=       "event_type   TEXT NOT NULL CHECK (event_type IN ('view',"
-    sql1 +=       "                                                   'cart',"
-    sql1 +=       "                                                   'purchase',"
-    sql1 +=       "                                                   'remove_from_cart')),"
-    sql1 +=       "product_id   INTEGER NOT NULL,"
-    sql1 +=       "price        NUMERIC(8,2) NOT NULL,"
-    sql1 +=       "user_id      INTEGER NOT NULL,"
-    sql1 +=       "user_session UUID NOT NULL"
-    sql1 +=      ");"
+    sql1 = psycopg.sql.SQL("""
+        CREATE TABLE IF NOT EXISTS {} (
+            event_time   TIMESTAMPTZ   NOT NULL,
+            event_type   TEXT          NOT NULL
+                        CHECK (event_type IN ('view', 'cart', 'purchase', 'remove_from_cart')),
+            product_id   INTEGER       NOT NULL,
+            price        NUMERIC(8,2)  NOT NULL,
+            user_id      BIGINT       NOT NULL,
+            user_session UUID          NOT NULL
+        );
+    """).format(psycopg.sql.Identifier(tablename))
 
-    sql2 = f"CREATE TEMP TABLE staging_{tablename} (LIKE {tablename} "
-    sql2 += "INCLUDING DEFAULTS EXCLUDING CONSTRAINTS) ON COMMIT DROP;"
+    sql2 = psycopg.sql.SQL("""
+        CREATE TEMP TABLE {staging} (
+            LIKE {target} INCLUDING DEFAULTS EXCLUDING CONSTRAINTS
+            ) ON COMMIT DROP;
+    """).format(
+        staging = psycopg.sql.Identifier(f"staging_{tablename}"),
+        target  = psycopg.sql.Identifier(tablename)
+    )
 
-    sql3 = f"ALTER TABLE staging_{tablename} ALTER COLUMN user_session DROP NOT NULL;"
+    sql3 = psycopg.sql.SQL("""
+        ALTER TABLE {staging} ALTER COLUMN user_session DROP NOT NULL;
+    """).format(staging=psycopg.sql.Identifier(f"staging_{tablename}"))
 
-    sql4 = f"COPY staging_{tablename} FROM STDIN "
-    sql4 += "WITH (FORMAT csv, HEADER true, DELIMITER ',');"
+    sql4 = psycopg.sql.SQL("""
+        COPY {staging} FROM STDIN
+        WITH (FORMAT csv, HEADER true, DELIMITER ',');
+    """).format(staging=psycopg.sql.Identifier(f"staging_{tablename}"))
 
-    sql5 = f"INSERT INTO {tablename} SELECT * FROM staging_{tablename} " 
-    sql5 += "WHERE user_session IS NOT NULL AND user_id IS NOT NULL "
-    sql5 += "  AND price IS NOT NULL AND product_id IS NOT NULL "
-    sql5 += "  AND event_type IS NOT NULL AND event_time IS NOT NULL ;"    
+    sql5 = psycopg.sql.SQL("""
+        INSERT INTO {target} SELECT * FROM {staging}
+            WHERE user_session IS NOT NULL AND user_id IS NOT NULL
+            AND price IS NOT NULL AND product_id IS NOT NULL
+            AND event_type IS NOT NULL AND event_time IS NOT NULL;
+    """).format(
+        target=psycopg.sql.Identifier(tablename),
+        staging=psycopg.sql.Identifier(f"staging_{tablename}")
+    )   
 
     with psycopg.connect(
         "host=127.0.0.1 port=5432 dbname=piscineds user=luicasad password=mysecretpasswd"
