@@ -79,7 +79,7 @@ def main(table_path: str):
     )   
 
     with psycopg.connect(
-        "host=127.0.0.1 port=5432 dbname=piscineds user=luicasad password=mysecretpasswd"
+        host="127.0.0.1", port=5432, dbname="piscineds", user="luicasad"
     ) as conn:
         with conn.cursor() as cur:
             # cur.execute("SELECT version();")
