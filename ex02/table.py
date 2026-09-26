@@ -29,6 +29,31 @@ def path_test(path: str) -> str:
         f"Expected a CSV file, got '{ext[1:]}'"
     return abspath
 
+def create_event_type_t(cur)-> bool:
+
+    EXPECTED = ['view', 'cart', 'remove_from_cart', 'purchase']
+    cur.execute("SELECT to_regtype('public.event_type_t')")
+    exists = cur.fetchone()[0] is not None
+
+    if not exists:
+        cur.execute("""
+            CREATE TYPE public.event_type_t
+            AS ENUM ('view', 'cart', 'remove_from_cart', 'purchase')
+        """)
+        print("Type event_type_t created")
+        return True
+    else:
+        # It exists: make sure it has the values we expect
+        cur.execute("""
+            SELECT array_agg(enumlabel ORDER BY enumsortorder)
+            FROM pg_enum
+            WHERE enumtypid = 'public.event_type_t'::regtype
+        """)
+        labels = cur.fetchone()[0]
+        if labels != EXPECTED:
+            raise SystemExit(f"event_type_t exists with different values: {labels}")
+        print("Type event_type_t already exists")
+        return False
 
 def main(table_path: str):
     basename = os.path.basename(table_path)
@@ -41,11 +66,10 @@ def main(table_path: str):
     sql1 = psycopg.sql.SQL("""
         CREATE TABLE IF NOT EXISTS {} (
             event_time   TIMESTAMPTZ   NOT NULL,
-            event_type   TEXT          NOT NULL
-                        CHECK (event_type IN ('view', 'cart', 'purchase', 'remove_from_cart')),
+            event_type   event_type_t  NOT NULL,
             product_id   INTEGER       NOT NULL,
             price        NUMERIC(8,2)  NOT NULL,
-            user_id      BIGINT       NOT NULL,
+            user_id      BIGINT        NOT NULL,
             user_session UUID          NOT NULL
         );
     """).format(psycopg.sql.Identifier(tablename))
@@ -83,6 +107,8 @@ def main(table_path: str):
     ) as conn:
         with conn.cursor() as cur:
             # cur.execute("SELECT version();")
+            if create_event_type_t(cur):
+                conn.commit()
             cur.execute(sql0)
             exists = cur.fetchone()[0]
             if exists:
