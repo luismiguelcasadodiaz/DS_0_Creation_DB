@@ -29,7 +29,8 @@ def path_test(path: str) -> str:
         f"Expected a CSV file, got '{ext[1:]}'"
     return abspath
 
-def create_event_type_t(cur)-> bool:
+
+def create_event_type_t(cur) -> bool:
 
     EXPECTED = ['view', 'cart', 'remove_from_cart', 'purchase']
     cur.execute("SELECT to_regtype('public.event_type_t')")
@@ -51,15 +52,16 @@ def create_event_type_t(cur)-> bool:
         """)
         labels = cur.fetchone()[0]
         if labels != EXPECTED:
-            raise SystemExit(f"event_type_t exists with different values: {labels}")
+            raise SystemExit(f"event_type_t had different values: {labels}")
         print("Type event_type_t already exists")
         return False
+
 
 def main(table_path: str):
     basename = os.path.basename(table_path)
     tablename = os.path.splitext(basename)[0]
     sql0 = psycopg.sql.SQL("""
-        SELECT EXISTS (SELECT 1 FROM information_schema.tables 
+        SELECT EXISTS (SELECT 1 FROM information_schema.tables
         WHERE table_schema = 'public' AND table_name = {});
     """).format(psycopg.sql.Literal(tablename))
 
@@ -79,8 +81,8 @@ def main(table_path: str):
             LIKE {target} INCLUDING DEFAULTS EXCLUDING CONSTRAINTS
             ) ON COMMIT DROP;
     """).format(
-        staging = psycopg.sql.Identifier(f"staging_{tablename}"),
-        target  = psycopg.sql.Identifier(tablename)
+            staging=psycopg.sql.Identifier(f"staging_{tablename}"),
+            target=psycopg.sql.Identifier(tablename)
     )
 
     sql3 = psycopg.sql.SQL("""
@@ -100,7 +102,7 @@ def main(table_path: str):
     """).format(
         target=psycopg.sql.Identifier(tablename),
         staging=psycopg.sql.Identifier(f"staging_{tablename}")
-    )   
+    )
 
     with psycopg.connect(
         host="127.0.0.1", port=5432, dbname="piscineds", user="luicasad"
@@ -121,19 +123,19 @@ def main(table_path: str):
                 try:
                     cur.execute(sql2)
                     cur.execute(sql3)
-                    print(f"Temporal table staging_{tablename} created succesfully")
+                    print(f"Temporal staging_{tablename} created succesfully")
                     with open(table_path, "r", encoding="utf-8") as f:
                         with cur.copy(sql4) as copy:
                             copy.write(f.read())
                     cur.execute(f"SELECT COUNT(*) FROM staging_{tablename};")
-                    rows_staged = cur.fetchone()[0];
-                    print(f"Temp Table populated succesfully with {rows_staged} rows.")
+                    staged = cur.fetchone()[0]
+                    print(f"Temp Table populated with {staged} rows.")
                     cur.execute(sql5)
-                    conn.commit()        
+                    conn.commit()
                     cur.execute(f"SELECT COUNT(*) FROM {tablename};")
-                    rows_imported = cur.fetchone()[0];
-                    print(f"Table {tablename} populated succesfully with {rows_imported} rows")
-                    print(f"{rows_staged - rows_imported} having some feature with NULL values were dropped ")
+                    imported = cur.fetchone()[0]
+                    print(f"Table {tablename} populated  with {imported} rows")
+                    print(f"{staged - imported} dropped with NULL")
                 except Exception as e:
                     conn.rollback()
                     print(f"Error importing {table_path}: {e}")
@@ -147,4 +149,3 @@ if __name__ == "__main__":
         print("python ./table.py <table's path>")
         sys.exit(1)
     main(path_test(sys.argv[1]))
-

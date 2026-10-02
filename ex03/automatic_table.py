@@ -6,11 +6,11 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from ex02.table import main  # noqa: E402
 from ex02.table import path_test  # noqa: E402
 
+
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: automatic_table <path to folder>")
         sys.exit(1)
-
 
     carpeta = Path(sys.argv[1])
 

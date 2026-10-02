@@ -34,19 +34,18 @@ def main(table_path: str):
     basename = os.path.basename(table_path)
     tablename = os.path.splitext(basename)[0]+"s"  # subject dixit.
     sql0 = psycopg.sql.SQL("""
-        SELECT EXISTS (SELECT 1 FROM information_schema.tables 
+        SELECT EXISTS (SELECT 1 FROM information_schema.tables
         WHERE table_schema = 'public' AND table_name = {});
     """).format(psycopg.sql.Literal(tablename))
 
     sql1 = psycopg.sql.SQL("""
         CREATE TABLE IF NOT EXISTS {} (
-            category_id   BIGINT,        
+            category_id   BIGINT,
             product_id    INTEGER NOT NULL,
             category_code TEXT,
             brand         TEXT
         );
     """).format(psycopg.sql.Identifier(tablename))
-
 
     csv_columns = ["product_id", "category_id", "category_code", "brand"]
 
@@ -57,8 +56,6 @@ def main(table_path: str):
         psycopg.sql.Identifier(tablename),
         psycopg.sql.SQL(", ").join(map(psycopg.sql.Identifier, csv_columns)),
     )
-
-
 
     with psycopg.connect(
         host="127.0.0.1", port=5432, dbname="piscineds", user="luicasad"
@@ -79,9 +76,9 @@ def main(table_path: str):
                         with cur.copy(sql4) as copy:
                             copy.write(f.read())
                     cur.execute(f"SELECT COUNT(*) FROM {tablename};")
-                    rows_imported = cur.fetchone()[0];
-                    conn.commit()        
-                    print(f"Table {tablename} populated succesfully with {rows_imported} rows")
+                    imported = cur.fetchone()[0]
+                    conn.commit()
+                    print(f"Table {tablename} populated  with {imported} rows")
                 except Exception as e:
                     conn.rollback()
                     print(f"Error importing {table_path}: {e}")
@@ -95,4 +92,3 @@ if __name__ == "__main__":
         print("python ./table.py <table's path>")
         sys.exit(1)
     main(path_test(sys.argv[1]))
-
