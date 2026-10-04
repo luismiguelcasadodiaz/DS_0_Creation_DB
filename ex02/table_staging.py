@@ -60,27 +60,49 @@ def create_event_type_t(cur) -> bool:
 def main(table_path: str):
     basename = os.path.basename(table_path)
     tablename = os.path.splitext(basename)[0]
-    # Checks table existance
     sql0 = psycopg.sql.SQL("""
         SELECT EXISTS (SELECT 1 FROM information_schema.tables
         WHERE table_schema = 'public' AND table_name = {});
     """).format(psycopg.sql.Literal(tablename))
-    # Create table
+
     sql1 = psycopg.sql.SQL("""
         CREATE TABLE IF NOT EXISTS {} (
-            event_time   TIMESTAMPTZ,
-            event_type   event_type_t,
-            product_id   INTEGER,
-            price        NUMERIC(8,2),
-            user_id      BIGINT,
-            user_session UUID
+            event_time   TIMESTAMPTZ   NOT NULL,
+            event_type   event_type_t  NOT NULL,
+            product_id   INTEGER       NOT NULL,
+            price        NUMERIC(8,2)  NOT NULL,
+            user_id      BIGINT        NOT NULL,
+            user_session UUID          NOT NULL
         );
     """).format(psycopg.sql.Identifier(tablename))
-    # Import data
+
     sql2 = psycopg.sql.SQL("""
-        COPY {} FROM STDIN
+        CREATE TEMP TABLE {staging} (
+            LIKE {target} INCLUDING DEFAULTS EXCLUDING CONSTRAINTS
+            ) ON COMMIT DROP;
+    """).format(
+            staging=psycopg.sql.Identifier(f"staging_{tablename}"),
+            target=psycopg.sql.Identifier(tablename)
+    )
+
+    sql3 = psycopg.sql.SQL("""
+        ALTER TABLE {staging} ALTER COLUMN user_session DROP NOT NULL;
+    """).format(staging=psycopg.sql.Identifier(f"staging_{tablename}"))
+
+    sql4 = psycopg.sql.SQL("""
+        COPY {staging} FROM STDIN
         WITH (FORMAT csv, HEADER true, DELIMITER ',');
-    """).format(psycopg.sql.Identifier(tablename))
+    """).format(staging=psycopg.sql.Identifier(f"staging_{tablename}"))
+
+    sql5 = psycopg.sql.SQL("""
+        INSERT INTO {target} SELECT * FROM {staging}
+            WHERE user_session IS NOT NULL AND user_id IS NOT NULL
+            AND price IS NOT NULL AND product_id IS NOT NULL
+            AND event_type IS NOT NULL AND event_time IS NOT NULL;
+    """).format(
+        target=psycopg.sql.Identifier(tablename),
+        staging=psycopg.sql.Identifier(f"staging_{tablename}")
+    )
 
     with psycopg.connect(
         host="127.0.0.1", port=5432, dbname="piscineds", user="luicasad"
@@ -99,13 +121,21 @@ def main(table_path: str):
                 cur.execute(sql1)
                 print(f"Table {tablename} created succesfully")
                 try:
+                    cur.execute(sql2)
+                    cur.execute(sql3)
+                    print(f"Temporal staging_{tablename} created succesfully")
                     with open(table_path, "r", encoding="utf-8") as f:
-                        with cur.copy(sql2) as copy:
+                        with cur.copy(sql4) as copy:
                             copy.write(f.read())
+                    cur.execute(f"SELECT COUNT(*) FROM staging_{tablename};")
+                    staged = cur.fetchone()[0]
+                    print(f"Temp Table populated with {staged} rows.")
+                    cur.execute(sql5)
                     conn.commit()
                     cur.execute(f"SELECT COUNT(*) FROM {tablename};")
                     imported = cur.fetchone()[0]
                     print(f"Table {tablename} populated  with {imported} rows")
+                    print(f"{staged - imported} dropped with NULL")
                 except Exception as e:
                     conn.rollback()
                     print(f"Error importing {table_path}: {e}")

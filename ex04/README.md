@@ -163,6 +163,43 @@ Konowing this i permutted numeric fields:
 
 After importing the data, the table size was of `4,904KB`. I saved 2,54%.
 ```sql
-SELECT pg_size_pretty(pg_relation_size('items'));
+# duplicates product_id
+
+Items table has 45138 produc:id values duplicated.
+
+```sql
+piscineds=# SELECT count(*) FROM (SELECT product_id, COUNT(*)
+FROM items
+GROUP BY product_id
+HAVING COUNT(*) > 1);
+ count
+-------
+ 45138
+(1 row)
 ```
 
+
+
+
+
+```sh
+(piscine) localhost:~/ds/DS_0_Creation_DB/data/item$ grep "5861706" item.csv 
+5861706,1487580008347075584,,fly
+5861706,1487580008347075584,,kinetics
+5861706,,,
+5861706,1819693959081886208,,fly
+5861706,1487580008347075584,,
+(piscine) localhost:~/ds/DS_0_Creation_DB/data/item$ grep "37042" item.csv 
+37042,1783999064136745216,,candy
+37042,1783999064136745216,,runail
+37042,,,
+37042,1487580006895846400,,candy
+37042,1783999064136745216,,
+(piscine) localhost:~/ds/DS_0_Creation_DB/data/item$ grep "37072" item.csv 
+37072,1783999064136745216,,candy
+37072,1783999064136745216,,runail
+37072,,,
+37072,1487580006895846400,,candy
+37072,1783999064136745216,,
+wewe
+SELECT pg_size_pretty(pg_relation_size('items'));
